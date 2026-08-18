@@ -16,6 +16,7 @@ import { buildSigningPayload, canonicalizeParams } from "./payload";
 import {
   APIGuardConfig,
   ED25519KeypairBase64,
+  FetchOptions,
   HttpMethod,
   NonceStore,
   NormalizedRequest,
@@ -432,6 +433,85 @@ export class APIGuard {
       "headers" in input &&
       typeof (input as Request).clone === "function"
     );
+  }
+
+  // -- Fetch API Wrappers ------------------------------------------------
+
+  /**
+   * Internal helper to sign a request and immediately dispatch it via fetch()
+   */
+  private async fetchWithSignature(
+    method: HttpMethod,
+    inputUrl: string | URL,
+    options: FetchOptions = {},
+  ): Promise<Response> {
+    const url = typeof inputUrl === "string" ? new URL(inputUrl) : inputUrl;
+
+    // 1. Extract the path for signing
+    const path = url.pathname;
+
+    // 2. Extract and merge URL search params with options.params
+    const params: Record<string, string> = { ...options.params };
+    url.searchParams.forEach((value, key) => {
+      params[key] = value;
+    });
+
+    // 3. Generate the cryptographic headers
+    const signatureHeaders = await this.sign(method, path, {
+      body: options.body,
+      params: Object.keys(params).length > 0 ? params : undefined,
+    });
+
+    // 4. Prepare the final headers for the fetch request
+    const fetchHeaders = new Headers(options.headers);
+    Object.entries(signatureHeaders).forEach(([key, value]) => {
+      fetchHeaders.set(key, value);
+    });
+
+    // Automatically set Content-Type for JSON if a plain object was passed
+    if (
+      options.body !== undefined &&
+      typeof options.body !== "string" &&
+      !fetchHeaders.has("Content-Type")
+    ) {
+      fetchHeaders.set("Content-Type", "application/json");
+    }
+
+    // 5. Serialize the body if necessary
+    const fetchBody =
+      options.body !== undefined
+        ? typeof options.body === "string"
+          ? options.body
+          : JSON.stringify(options.body)
+        : undefined;
+
+    // 6. Execute the fetch request
+    return fetch(url.toString(), {
+      ...options,
+      method,
+      headers: fetchHeaders,
+      body: fetchBody,
+    });
+  }
+
+  public async GET(url: string | URL, options?: Omit<FetchOptions, "body">) {
+    return this.fetchWithSignature("GET", url, options);
+  }
+
+  public async POST(url: string | URL, options?: FetchOptions) {
+    return this.fetchWithSignature("POST", url, options);
+  }
+
+  public async PUT(url: string | URL, options?: FetchOptions) {
+    return this.fetchWithSignature("PUT", url, options);
+  }
+
+  public async PATCH(url: string | URL, options?: FetchOptions) {
+    return this.fetchWithSignature("PATCH", url, options);
+  }
+
+  public async DELETE(url: string | URL, options?: FetchOptions) {
+    return this.fetchWithSignature("DELETE", url, options);
   }
 }
 

@@ -89,3 +89,9 @@ export interface APIGuardConfig {
   /** Pluggable nonce/replay store. Defaults to an in-memory Map (single-instance only). */
   nonceStore?: NonceStore;
 }
+
+
+export interface FetchOptions extends Omit<RequestInit, "body"> {
+  body?: any; // Accept object bodies to automatically JSON.stringify
+  params?: Record<string, string>;
+}
