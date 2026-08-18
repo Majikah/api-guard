@@ -1,0 +1,57 @@
+{
+  "name": "@majikah/api-guard",
+  "type": "module",
+  "description": "APIGuard is a lightweight SDK for securing API communications. It uses Ed25519 cryptography to sign requests and verify their integrity. Built to run anywhere—Node.js, Cloudflare Workers, Next.js, and the browser—it natively supports standard Web `Request` objects while protecting your API against payload tampering and replay attacks.",
+  "version": "0.0.1",
+  "license": "Apache-2.0",
+  "author": "Zelijah",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Majikah/api-guard.git"
+  },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/jedlsf"
+  },
+  "keywords": [
+    "digital-signature",
+    "payload-signing",
+    "payload-verification",
+    "tamper-proof",
+    "tamper-detection",
+    "ed25519",
+    "cryptography",
+    "signature-verification",
+    "data-integrity",
+    "content-authentication",
+    "majikah",
+    "api-guard"
+  ],
+  "homepage": "https://github.com/Majikah/api-guard#readme",
+  "bugs": {
+    "url": "https://github.com/Majikah/api-guard/issues"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build",
+    "package": "npm run build && npm version patch && git push && git push --tags",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@stablelib/ed25519": "^2.1.0",
+    "@stablelib/sha256": "^2.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.9"
+  }
+}
