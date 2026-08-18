@@ -2,7 +2,7 @@
   "name": "@majikah/api-guard",
   "type": "module",
   "description": "APIGuard is a lightweight SDK for securing API communications. It uses Ed25519 cryptography to sign requests and verify their integrity. Built to run anywhere—Node.js, Cloudflare Workers, Next.js, and the browser—it natively supports standard Web `Request` objects while protecting your API against payload tampering and replay attacks.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "license": "Apache-2.0",
   "author": "Zelijah",
   "main": "./dist/index.js",
