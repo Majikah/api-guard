@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { APIGuard } from "../src/api-guard";
 import { APIGuardError } from "../src/error";
 import { base64ToBytes, bytesToBase64 } from "../src/hash";
+import { sign as stableLibSign, verify as stableLibVerify } from "../src/crypto";
 import { NormalizedRequest } from "../src/types";
 
 describe("APIGuard SDK", () => {
@@ -179,6 +180,137 @@ describe("APIGuard SDK", () => {
       expect(headers["X-Signature-Timestamp"]).toBeDefined();
       expect(Number(headers["X-Signature-Timestamp"])).not.toBeNaN();
       expect(headers["X-Signature"]).toBeDefined();
+    });
+  });
+
+  describe("Configurable Ed25519 functions", () => {
+    it("uses a custom asynchronous signFunction and wipes its temporary secret-key copy", async () => {
+      let receivedSecretKey: Uint8Array | undefined;
+      let receivedPayload: Uint8Array | undefined;
+      const signer = APIGuard.init({
+        mode: "sign",
+        keyId: "custom-signer",
+        privateKeyBase64: senderKeys.privateKeyBase64,
+        signFunction: async (secretKey, payload) => {
+          receivedSecretKey = secretKey;
+          receivedPayload = payload;
+          await Promise.resolve();
+          return stableLibSign(secretKey, payload);
+        },
+      });
+
+      const headers = await signer.sign("POST", "/api/v1/custom", {
+        body: { custom: true },
+      });
+
+      expect(receivedPayload).toBeInstanceOf(Uint8Array);
+      expect(receivedSecretKey).toBeInstanceOf(Uint8Array);
+      expect([...receivedSecretKey!].every((byte) => byte === 0)).toBe(true);
+
+      const verifier = APIGuard.init({
+        mode: "verify",
+        publicKeys: { "custom-signer": senderKeys.publicKeyBase64 },
+      });
+      const result = await verifier.verify({
+        method: "POST",
+        path: "/api/v1/custom",
+        headers,
+        rawBody: JSON.stringify({ custom: true }),
+      });
+
+      expect(result.valid).toBe(true);
+    });
+
+    it("uses a custom asynchronous verifyFunction with StableLib-compatible signatures", async () => {
+      let verifyCalls = 0;
+      const signer = APIGuard.init({
+        mode: "sign",
+        keyId: "custom-signer",
+        privateKeyBase64: senderKeys.privateKeyBase64,
+      });
+      const headers = await signer.sign("GET", "/api/v1/custom-verify");
+
+      const verifier = APIGuard.init({
+        mode: "verify",
+        publicKeys: { "custom-signer": senderKeys.publicKeyBase64 },
+        verifyFunction: async (publicKey, payload, signature) => {
+          verifyCalls += 1;
+          await Promise.resolve();
+          return stableLibVerify(publicKey, payload, signature);
+        },
+      });
+
+      const result = await verifier.verify({
+        method: "GET",
+        path: "/api/v1/custom-verify",
+        headers,
+        rawBody: "",
+      });
+
+      expect(result.valid).toBe(true);
+      expect(verifyCalls).toBe(1);
+    });
+
+    it("treats a custom verifyFunction returning false as an invalid signature", async () => {
+      const signer = APIGuard.init({
+        mode: "sign",
+        keyId: "custom-signer",
+        privateKeyBase64: senderKeys.privateKeyBase64,
+      });
+      const headers = await signer.sign("GET", "/api/v1/custom-false");
+
+      const verifier = APIGuard.init({
+        mode: "verify",
+        publicKeys: { "custom-signer": senderKeys.publicKeyBase64 },
+        verifyFunction: async () => false,
+      });
+
+      await expect(
+        verifier.verify({
+          method: "GET",
+          path: "/api/v1/custom-false",
+          headers,
+          rawBody: "",
+        }),
+      ).resolves.toEqual({ valid: false, reason: "invalid_signature" });
+    });
+
+    it("returns verification_error when a custom verifyFunction throws", async () => {
+      const signer = APIGuard.init({
+        mode: "sign",
+        keyId: "custom-signer",
+        privateKeyBase64: senderKeys.privateKeyBase64,
+      });
+      const headers = await signer.sign("GET", "/api/v1/custom-error");
+
+      const verifier = APIGuard.init({
+        mode: "verify",
+        publicKeys: { "custom-signer": senderKeys.publicKeyBase64 },
+        verifyFunction: async () => {
+          throw new Error("custom verifier unavailable");
+        },
+      });
+
+      const result = await verifier.verify({
+        method: "GET",
+        path: "/api/v1/custom-error",
+        headers,
+        rawBody: "",
+      });
+      expect(result).toEqual({ valid: false, reason: "verification_error" });
+    });
+
+    it("rejects a custom signFunction that does not return a 64-byte signature", async () => {
+      const signer = APIGuard.init({
+        mode: "sign",
+        keyId: "custom-signer",
+        privateKeyBase64: senderKeys.privateKeyBase64,
+        signFunction: async () => new Uint8Array(32),
+      });
+
+      await expect(signer.sign("GET", "/api/v1/custom-bad-signature")).rejects.toThrow(
+        "signFunction must return a 64-byte Ed25519 signature",
+      );
     });
   });
 

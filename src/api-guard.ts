@@ -23,6 +23,8 @@ import {
   SignedHeaders,
   SignOptions,
   VerifyResult,
+  Ed25519SignFunction,
+  Ed25519VerifyFunction,
 } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -76,6 +78,8 @@ export class APIGuard {
   private publicKeyRegistry: Map<string, Uint8Array> = new Map();
   private maxSkewMs: number;
   private nonceStore: NonceStore;
+  private signFunction: Ed25519SignFunction;
+  private verifyFunction: Ed25519VerifyFunction;
 
   private constructor(config: APIGuardConfig) {
     if (
@@ -89,6 +93,15 @@ export class APIGuard {
     this.mode = config.mode;
     this.maxSkewMs = config.maxSkewMs ?? 90_000;
     this.nonceStore = config.nonceStore ?? new InMemoryNonceStore();
+    this.signFunction = config.signFunction ?? ed25519Sign;
+    this.verifyFunction = config.verifyFunction ?? ed25519Verify;
+
+    if (config.signFunction !== undefined && typeof config.signFunction !== "function") {
+      throw new APIGuardError("signFunction must be a function");
+    }
+    if (config.verifyFunction !== undefined && typeof config.verifyFunction !== "function") {
+      throw new APIGuardError("verifyFunction must be a function");
+    }
 
     if (config.mode === "sign" || config.mode === "both") {
       if (!config.keyId || config.keyId.trim().length === 0) {
@@ -280,7 +293,12 @@ export class APIGuard {
     let secretKeyClone: Uint8Array | undefined;
     try {
       secretKeyClone = this.secretKey.slice();
-      const signature = ed25519Sign(secretKeyClone, payload);
+      const signature = await this.signFunction(secretKeyClone, payload);
+      if (!(signature instanceof Uint8Array) || signature.length !== SIGNATURE_LENGTH) {
+        throw new APIGuardError(
+          `signFunction must return a ${SIGNATURE_LENGTH}-byte Ed25519 signature`,
+        );
+      }
       return {
         "X-Signature-Timestamp": String(timestamp),
         "X-Signature-Nonce": nonce,
@@ -354,7 +372,10 @@ export class APIGuard {
 
     let edOk: boolean;
     try {
-      edOk = ed25519Verify(publicKey, payload, signature);
+      edOk = await this.verifyFunction(publicKey, payload, signature);
+      if (typeof edOk !== "boolean") {
+        throw new TypeError("verifyFunction must resolve to a boolean");
+      }
     } catch (e) {
       console.error(e);
       return { valid: false, reason: "verification_error" };
