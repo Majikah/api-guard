@@ -127,6 +127,43 @@ export async function POST(request: Request) {
 
 ---
 
+## Custom Ed25519 Functions
+
+APIGuard accepts optional signing and verification functions through `APIGuard.init()`. This lets an application supply platform-native cryptography (for example, Web Crypto) without changing APIGuard's request canonicalization, timestamp handling, nonce protection, or HTTP headers.
+
+Both callbacks may be synchronous or asynchronous:
+
+- `signFunction(secretKey, payload)` receives the decoded 64-byte StableLib-format secret key and exact signing payload, and must return a 64-byte Ed25519 signature.
+- `verifyFunction(publicKey, payload, signature)` receives a 32-byte raw Ed25519 public key, the exact signing payload, and a 64-byte signature, and must return a boolean.
+
+When omitted, APIGuard uses its built-in StableLib Ed25519 implementation. Custom implementations are responsible for preserving the same Ed25519 algorithm and byte-level signature format. A custom verifier returning `false` is treated as an invalid signature; a thrown error is reported as `verification_error`. APIGuard does not silently fall back after a custom verifier returns `false`.
+
+```typescript
+import { APIGuard } from "@majikah/api-guard";
+import { sign as stableLibSign, verify as stableLibVerify } from "@majikah/api-guard";
+
+// The StableLib functions are shown here as adapters. Replace them with
+// platform-native implementations when the runtime supports them.
+const guard = APIGuard.init({
+  mode: "both",
+  keyId: "client-1",
+  privateKeyBase64: process.env.CLIENT_PRIVATE_KEY,
+  publicKeys: {
+    "trusted-client": process.env.TRUSTED_CLIENT_PUBLIC_KEY!,
+  },
+  signFunction: async (secretKey, payload) =>
+    stableLibSign(secretKey, payload),
+  verifyFunction: async (publicKey, payload, signature) =>
+    stableLibVerify(publicKey, payload, signature),
+});
+```
+
+The signing callback receives a temporary copy of the private key. APIGuard wipes that copy when the callback settles. Implementations should not retain the supplied key buffer beyond the callback.
+
+If a platform-native implementation needs an imported `CryptoKey`, cache that imported key in the callback's closure or in the application runtime rather than importing it for every request. Keep StableLib as the default by omitting a callback, or implement an explicit compatibility fallback inside your custom callback.
+
+---
+
 ## How It Works
 
 Each signed request produces a canonical, domain-separated payload before signing — not just the raw body:

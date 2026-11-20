@@ -8,6 +8,30 @@ export type ED25519RawSignature = Uint8Array;
 export type ED25519RawPublicKey = Uint8Array;
 export type ED25519RawSecretKey = Uint8Array;
 
+/**
+ * Creates an Ed25519 signature over the exact APIGuard signing payload.
+ *
+ * The secret key uses the existing StableLib format: 64 bytes consisting of
+ * seed[32] + publicKey[32]. The supplied buffer is a short-lived copy and is
+ * wiped by APIGuard after this function resolves or rejects.
+ */
+export type Ed25519SignFunction = (
+  secretKey: ED25519RawSecretKey,
+  payload: Uint8Array,
+) => ED25519RawSignature | Promise<ED25519RawSignature>;
+
+/**
+ * Verifies an Ed25519 signature over the exact APIGuard signing payload.
+ *
+ * The public key is a 32-byte raw Ed25519 key and the signature is 64 bytes.
+ * Implementations may be synchronous or asynchronous.
+ */
+export type Ed25519VerifyFunction = (
+  publicKey: ED25519RawPublicKey,
+  payload: Uint8Array,
+  signature: ED25519RawSignature,
+) => boolean | Promise<boolean>;
+
 export interface ED25519Keypair {
   public: ED25519RawPublicKey;
   secret: ED25519RawSecretKey;
@@ -84,6 +108,16 @@ export interface APIGuardConfig {
   privateKeyBase64?: string;
   /** keyId -> base64 32-byte Ed25519 public key. Required for verify mode. */
   publicKeys?: Record<string, string>;
+  /**
+   * Optional Ed25519 signing implementation. May be synchronous or async.
+   * Defaults to the built-in StableLib implementation.
+   */
+  signFunction?: Ed25519SignFunction;
+  /**
+   * Optional Ed25519 verification implementation. May be synchronous or async.
+   * Defaults to the built-in StableLib implementation.
+   */
+  verifyFunction?: Ed25519VerifyFunction;
   /** Allowed clock skew in ms. Default 90_000 (90s). */
   maxSkewMs?: number;
   /** Pluggable nonce/replay store. Defaults to an in-memory Map (single-instance only). */
