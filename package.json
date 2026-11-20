@@ -48,12 +48,12 @@
     "prepare": "npm run build"
   },
   "dependencies": {
-    "@stablelib/ed25519": "^2.1.0",
-    "@stablelib/sha256": "^2.0.1"
+    "@stablelib/ed25519": "^2.1.1",
+    "@stablelib/sha256": "^2.0.2"
   },
   "devDependencies": {
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.6.6",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11"
+    "vitest": "^5.1.1"
   }
 }
